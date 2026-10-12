@@ -554,15 +554,164 @@ WHEN (OLD.pv_actuels IS DISTINCT FROM NEW.pv_actuels)
 EXECUTE FUNCTION journaliser_pv();
 -- =====================================================================
 --  5. VUES                                           (Membre 3)
---  À faire : vue_table_mj, vue_mj_inventaire, vue_mj_jets,
---            vue_mj_journal, vue_fiches_joueurs
 -- =====================================================================
+
+CREATE VIEW vue_table_mj AS
+SELECT
+    p.id,
+    p.joueur_id,
+    p.campagne_id,
+    p.race_id,
+    p.classe_id,
+    p.nom,
+    p.niveau,
+    p.xp,
+    p.force,
+    p.dexterite,
+    p.constitution,
+    p.intelligence,
+    p.sagesse,
+    p.charisme,
+    p.pv_max,
+    p.pv_actuels,
+    p.classe_armure,
+    p.statut,
+    p.notes_mj,
+    p.cree_le,
+    (SELECT r.nom FROM races AS r WHERE r.id = p.race_id) AS race_nom,
+    (SELECT c.nom FROM classes AS c WHERE c.id = p.classe_id) AS classe_nom,
+    (SELECT ca.nom FROM campagnes AS ca WHERE ca.id = p.campagne_id) AS campagne_nom,
+    modificateur(p.force) AS mod_force,
+    modificateur(p.dexterite) AS mod_dexterite,
+    modificateur(p.constitution) AS mod_constitution,
+    modificateur(p.intelligence) AS mod_intelligence,
+    modificateur(p.sagesse) AS mod_sagesse,
+    modificateur(p.charisme) AS mod_charisme,
+    (SELECT cl.de_vie FROM classes AS cl WHERE cl.id = p.classe_id) AS de_vie
+FROM personnages AS p;
+
+CREATE VIEW vue_mj_inventaire AS
+SELECT
+    i.personnage_id,
+    i.objet_id,
+    i.quantite,
+    i.equipe,
+    (SELECT o.nom FROM objets AS o WHERE o.id = i.objet_id) AS objet_nom,
+    (SELECT o.poids_kg FROM objets AS o WHERE o.id = i.objet_id) AS poids_kg
+FROM inventaire AS i;
+
+CREATE VIEW vue_mj_jets AS
+SELECT
+    j.id,
+    j.personnage_id,
+    (SELECT p.nom FROM personnages AS p WHERE p.id = j.personnage_id) AS nom_personnage,
+    j.type_jet,
+    j.faces,
+    j.resultat,
+    j.modificateur,
+    j.total,
+    j.lance_le
+FROM jets_de_des AS j;
+
+CREATE VIEW vue_mj_journal AS
+SELECT
+    j.id,
+    j.personnage_id,
+    (SELECT p.nom FROM personnages AS p WHERE p.id = j.personnage_id) AS nom_personnage,
+    j.ancien_pv,
+    j.nouveau_pv,
+    j.motif,
+    j.auteur,
+    j.le
+FROM journal_pv AS j;
+
+CREATE VIEW vue_fiches_joueurs AS
+SELECT
+    p.id,
+    p.joueur_id,
+    p.campagne_id,
+    p.race_id,
+    p.classe_id,
+    p.nom,
+    p.niveau,
+    p.xp,
+    p.force,
+    p.dexterite,
+    p.constitution,
+    p.intelligence,
+    p.sagesse,
+    p.charisme,
+    p.pv_max,
+    p.pv_actuels,
+    p.classe_armure,
+    p.statut,
+    p.cree_le,
+    (SELECT r.nom FROM races AS r WHERE r.id = p.race_id) AS race_nom,
+    (SELECT c.nom FROM classes AS c WHERE c.id = p.classe_id) AS classe_nom,
+    (SELECT ca.nom FROM campagnes AS ca WHERE ca.id = p.campagne_id) AS campagne_nom,
+    modificateur(p.force) AS mod_force,
+    modificateur(p.dexterite) AS mod_dexterite,
+    modificateur(p.constitution) AS mod_constitution,
+    modificateur(p.intelligence) AS mod_intelligence,
+    modificateur(p.sagesse) AS mod_sagesse,
+    modificateur(p.charisme) AS mod_charisme,
+    (SELECT cl.de_vie FROM classes AS cl WHERE cl.id = p.classe_id) AS de_vie
+FROM personnages AS p
+WHERE p.joueur_id IS NOT NULL;
 
 
 -- =====================================================================
 --  6. RÔLES ET PRIVILÈGES                            (Membre 3)
---  À faire : maitre_du_jeu + mj_elminster, joueur + joueur_pip
 -- =====================================================================
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'maitre_du_jeu') THEN
+        CREATE ROLE maitre_du_jeu NOLOGIN;
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'joueur') THEN
+        CREATE ROLE joueur NOLOGIN;
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'mj_elminster') THEN
+        CREATE ROLE mj_elminster LOGIN PASSWORD 'mj_elminster';
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'joueur_pip') THEN
+        CREATE ROLE joueur_pip LOGIN PASSWORD 'joueur_pip';
+    END IF;
+END $$;
+
+GRANT maitre_du_jeu TO mj_elminster;
+GRANT joueur TO joueur_pip;
+
+REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA public FROM PUBLIC;
+REVOKE EXECUTE ON ALL PROCEDURES IN SCHEMA public FROM PUBLIC;
+
+GRANT EXECUTE ON FUNCTION modificateur(int) TO maitre_du_jeu, joueur;
+GRANT EXECUTE ON FUNCTION lancer_de(int, int, text, text) TO maitre_du_jeu;
+GRANT EXECUTE ON PROCEDURE modifier_pv(int, int, text) TO maitre_du_jeu;
+GRANT EXECUTE ON PROCEDURE distribuer_xp(int, int) TO maitre_du_jeu;
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE vue_table_mj TO maitre_du_jeu;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE vue_mj_inventaire TO maitre_du_jeu;
+GRANT SELECT ON TABLE vue_mj_jets TO maitre_du_jeu;
+GRANT SELECT ON TABLE vue_mj_journal TO maitre_du_jeu;
+GRANT SELECT ON TABLE vue_fiches_joueurs TO maitre_du_jeu;
+
+GRANT SELECT ON TABLE vue_fiches_joueurs TO joueur;
+
+GRANT USAGE ON SEQUENCE personnages_id_seq TO maitre_du_jeu;
 
 
 -- =====================================================================
