@@ -60,11 +60,21 @@ Tests utiles : `CALL modifier_pv(1, -8, 'Gobelin')` produit une entrée de journ
 
 ## Vues
 
-_À rédiger par le membre 3 : ce que chaque vue montre, et ce qu'elle cache._
+Les vues du membre 3 centralisent l'affichage métier sans donner d'accès direct sur les tables.
+
+- `vue_table_mj` est la vue de travail du MJ : elle expose la fiche complète de `personnages`, avec les libellés de race, classe et campagne, les six modificateurs D&D (`modificateur(force)`, `modificateur(dexterite)`, etc.) et le `de_vie`. Elle est construite sur une seule table (`personnages`) dans le `FROM`, ce qui laisse PostgreSQL la rendre modifiable automatiquement pour les champs de la table, notamment `notes_mj`.
+- `vue_mj_inventaire` reprend `inventaire` et ajoute le nom et le poids de l'objet via des sous-requêtes scalaires. Le MJ peut l'utiliser pour insérer, mettre à jour ou supprimer une ligne d'inventaire, tout en conservant le trigger de charge sur `inventaire`.
+- `vue_mj_jets` et `vue_mj_journal` sont des vues en lecture seule. Elles ajoutent le nom du personnage associé à chaque jet ou entrée de journal pour un historique exploitable dans l'interface de jeu.
+- `vue_fiches_joueurs` ne montre que les personnages ayant un `joueur_id` non nul. Elle exclut `notes_mj`, donc le contenu réservé au MJ reste caché. Elle ne renvoie pas non plus les PNJ (`personnages.joueur_id IS NULL`), ce qui limite l'exposition aux fiches publiques des joueurs.
 
 ## Rôles
 
-_À rédiger par le membre 3 : pour chaque rôle, une action autorisée et une action refusée._
+Les droits sont attribués aux rôles métier, pas aux comptes humains. Cela évite d'avoir à gérer des autorisations répétées et permet de faire évoluer les accès de façon claire.
+
+- `maitre_du_jeu` : rôle du MJ. Il peut consulter toutes les vues du MJ et modifier via ses vues ; `SET ROLE mj_elminster;` puis `CALL modifier_pv(1, -8, 'Gobelin');` est autorisé. En revanche, `DELETE FROM personnages;` est refusée parce que les tables restent inaccessibles directement.
+- `joueur` : rôle des joueurs. `SET ROLE joueur_pip; SELECT * FROM vue_fiches_joueurs;` est autorisé. La requête `SELECT notes_mj FROM personnages;` est refusée, et `CALL modifier_pv(1, -8, 'Gobelin');` est également bloquée.
+
+Pour le bon fonctionnement des vues, `modificateur(int)` est exécutable par les deux rôles. Les autres fonctions de la base sont restreintes à `maitre_du_jeu` pour que les procédures métier restent centralisées dans PostgreSQL au lieu d'être laissées à des accès directs sur `personnages` ou `inventaire`.
 
 ## Index
 
