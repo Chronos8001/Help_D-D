@@ -1,0 +1,12 @@
+# Postgres local pour tester projet.sql (alternative au conteneur du festival).
+#   docker compose up -d
+#   ./rejouer.sh          -> repart d'une base vide et rejoue projet.sql
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: dnd
+      POSTGRES_PASSWORD: dnd
+      POSTGRES_DB: projet
+    ports:
+      - "5433:5432"
