@@ -552,8 +552,6 @@ AFTER UPDATE OF pv_actuels ON personnages
 FOR EACH ROW
 WHEN (OLD.pv_actuels IS DISTINCT FROM NEW.pv_actuels)
 EXECUTE FUNCTION journaliser_pv();
-
-
 -- =====================================================================
 --  5. VUES                                           (Membre 3)
 --  À faire : vue_table_mj, vue_mj_inventaire, vue_mj_jets,
