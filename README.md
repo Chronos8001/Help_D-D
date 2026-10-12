@@ -34,11 +34,29 @@ les fiches sont donc cohérentes.
 
 ## Fonctions et procédures
 
-_À rédiger par le membre 2 : ce qu'il fait / pourquoi il est là / la preuve._
+`modificateur(score)` applique l'arrondi vers le bas de la règle D&D 5e : 10 donne 0, 16 donne +3 et 8 donne −1. `lancer_de(p_perso, p_faces, p_type, p_carac)` tire le dé, ajoute le modificateur de caractéristique si elle est fournie, enregistre le jet et renvoie le total.
+
+`modifier_pv(p_perso, p_delta, p_motif)` centralise dégâts et soins. Les PV sont bornés entre 0 et `pv_max` ; à 0 le personnage est inconscient, sauf si les dégâts excédentaires atteignent `pv_max`, auquel cas il meurt. Un soin réveille un inconscient, mais soigner un mort renvoie une erreur. Chaque changement est transmis au trigger avec son motif.
+
+La procédure bonus `distribuer_xp(p_campagne, p_xp)` ajoute l'XP aux personnages non morts de la campagne et applique les paliers D&D 5e jusqu'au niveau 20. Chaque niveau gagné augmente les PV maximums selon le dé de vie de la classe et le modificateur de Constitution.
+
+Ces opérations sont `SECURITY DEFINER` : le MJ peut les appeler sans recevoir de droits directs sur les tables. Vérifications dans `psql` après `SET ROLE mj_elminster` :
+
+```sql
+SELECT modificateur(8), modificateur(10), modificateur(16); -- -1, 0, 3
+SELECT lancer_de(1, 20, 'attaque', 'FOR');
+CALL modifier_pv(1, -8, 'Gobelin');
+SELECT personnage_id, ancien_pv, nouveau_pv, motif, auteur
+FROM vue_mj_journal ORDER BY le DESC LIMIT 1;
+```
 
 ## Triggers
 
-_À rédiger par le membre 2. Pour chaque trigger, dire pourquoi la règle est dans la base plutôt que dans l'application._
+Trois triggers appliquent des règles communes à tous les clients. `trg_verifier_charge` refuse un ajout ou une modification d'inventaire qui ferait dépasser Force × 7,5 kg, avec le poids porté et la limite dans l'erreur. `trg_interdire_jet_mort` bloque tout jet créé pour un personnage mort. `trg_journaliser_pv` écrit l'ancien et le nouveau total de PV, le motif et l'auteur à chaque changement effectif.
+
+Ces règles vivent dans PostgreSQL plutôt que seulement dans l'application : `psql`, la page Vercel et un éventuel bot Discord passent ainsi par les mêmes contrôles. Les fonctions de trigger sont `SECURITY DEFINER`, car elles doivent consulter ou écrire des tables auxquelles le rôle MJ n'a pas accès directement. Le journal récupère le rôle actif, ou la session de connexion si aucun `SET ROLE` n'est utilisé.
+
+Tests utiles : `CALL modifier_pv(1, -8, 'Gobelin')` produit une entrée de journal ; `SELECT lancer_de(6, 20, 'attaque')` échoue car Grok est mort ; donner l'« Enclume de forgeron » à Thorin échoue car sa charge dépasserait sa limite.
 
 ## Vues
 

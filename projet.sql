@@ -274,14 +274,284 @@ ANALYZE;
 
 -- =====================================================================
 --  3. FONCTIONS ET PROCÉDURES                        (Membre 2)
---  À faire : modificateur(), lancer_de(), modifier_pv(), distribuer_xp()
 -- =====================================================================
+
+-- Arrondi vers le bas, notamment pour les scores impairs sous 10.
+CREATE OR REPLACE FUNCTION modificateur(p_score int)
+RETURNS int
+LANGUAGE sql
+IMMUTABLE
+AS $$
+    SELECT floor((p_score - 10) / 2.0)::int;
+$$;
+
+CREATE OR REPLACE FUNCTION lancer_de(
+    p_perso int,
+    p_faces int,
+    p_type text,
+    p_carac text DEFAULT NULL
+)
+RETURNS int
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    v_force        smallint;
+    v_dexterite    smallint;
+    v_constitution smallint;
+    v_intelligence smallint;
+    v_sagesse      smallint;
+    v_charisme     smallint;
+    v_score        smallint;
+    v_modificateur int := 0;
+    v_resultat     int;
+BEGIN
+    IF p_faces IS NULL OR p_faces NOT IN (4, 6, 8, 10, 12, 20, 100) THEN
+        RAISE EXCEPTION 'Nombre de faces invalide : %', p_faces;
+    END IF;
+
+    SELECT force, dexterite, constitution, intelligence, sagesse, charisme
+    INTO v_force, v_dexterite, v_constitution, v_intelligence, v_sagesse, v_charisme
+    FROM personnages
+    WHERE id = p_perso;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Personnage % introuvable', p_perso;
+    END IF;
+
+    IF p_carac IS NOT NULL THEN
+        v_score := CASE upper(p_carac)
+            WHEN 'FOR' THEN v_force
+            WHEN 'DEX' THEN v_dexterite
+            WHEN 'CON' THEN v_constitution
+            WHEN 'INT' THEN v_intelligence
+            WHEN 'SAG' THEN v_sagesse
+            WHEN 'CHA' THEN v_charisme
+            ELSE NULL
+        END;
+        IF v_score IS NULL THEN
+            RAISE EXCEPTION 'Caractéristique inconnue : % (FOR, DEX, CON, INT, SAG ou CHA)', p_carac;
+        END IF;
+        v_modificateur := modificateur(v_score);
+    END IF;
+
+    v_resultat := 1 + floor(random() * p_faces)::int;
+    INSERT INTO jets_de_des (personnage_id, type_jet, faces, resultat, modificateur)
+    VALUES (p_perso, p_type, p_faces, v_resultat, v_modificateur);
+
+    RETURN v_resultat + v_modificateur;
+END;
+$$;
+
+CREATE OR REPLACE PROCEDURE modifier_pv(p_perso int, p_delta int, p_motif text)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    v_personnage personnages%ROWTYPE;
+    v_pv_bruts   bigint;
+    v_nouveaux_pv int;
+    v_statut     varchar(12);
+BEGIN
+    SELECT * INTO v_personnage
+    FROM personnages
+    WHERE id = p_perso
+    FOR UPDATE;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Personnage % introuvable', p_perso;
+    END IF;
+    IF v_personnage.statut = 'mort' AND p_delta > 0 THEN
+        RAISE EXCEPTION 'Impossible de soigner % : le personnage est mort', v_personnage.nom;
+    END IF;
+
+    v_pv_bruts := v_personnage.pv_actuels::bigint + p_delta::bigint;
+    v_nouveaux_pv := greatest(0, least(v_personnage.pv_max::bigint, v_pv_bruts))::int;
+    v_statut := v_personnage.statut;
+
+    IF v_personnage.statut <> 'mort' THEN
+        IF p_delta < 0 AND v_pv_bruts <= 0 THEN
+            IF -v_pv_bruts >= v_personnage.pv_max THEN
+                v_statut := 'mort';
+            ELSE
+                v_statut := 'inconscient';
+            END IF;
+        ELSIF p_delta > 0 AND v_nouveaux_pv > 0 THEN
+            v_statut := 'vivant';
+        END IF;
+    END IF;
+
+    PERFORM set_config('grimoire.motif', coalesce(p_motif, ''), true);
+    UPDATE personnages
+    SET pv_actuels = v_nouveaux_pv,
+        statut = v_statut
+    WHERE id = p_perso;
+    PERFORM set_config('grimoire.motif', '', true);
+END;
+$$;
+
+CREATE OR REPLACE PROCEDURE distribuer_xp(p_campagne int, p_xp int)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    v_personnage record;
+    v_xp_total   bigint;
+    v_niveau     smallint;
+    v_gain_niveaux int;
+    v_gain_pv    int;
+BEGIN
+    IF p_xp IS NULL OR p_xp < 0 THEN
+        RAISE EXCEPTION 'Le gain d''XP doit être positif ou nul';
+    END IF;
+
+    FOR v_personnage IN
+        SELECT p.id, p.niveau, p.xp, p.constitution, c.de_vie
+        FROM personnages AS p
+        JOIN classes AS c ON c.id = p.classe_id
+        WHERE p.campagne_id = p_campagne
+          AND p.statut <> 'mort'
+        FOR UPDATE OF p
+    LOOP
+        v_xp_total := v_personnage.xp::bigint + p_xp;
+        IF v_xp_total > 2147483647 THEN
+            RAISE EXCEPTION 'Le total d''XP dépasse la capacité de stockage pour le personnage %', v_personnage.id;
+        END IF;
+
+        SELECT max(palier.niveau)::smallint
+        INTO v_niveau
+        FROM unnest(ARRAY[
+            0, 300, 900, 2700, 6500, 14000, 23000, 34000, 48000, 64000,
+            85000, 100000, 120000, 140000, 165000, 195000, 225000,
+            265000, 305000, 355000
+        ]) WITH ORDINALITY AS palier(xp, niveau)
+        WHERE palier.xp <= v_xp_total;
+
+        v_gain_niveaux := greatest(0, v_niveau - v_personnage.niveau);
+        v_gain_pv := v_gain_niveaux * (
+            v_personnage.de_vie / 2 + 1 + modificateur(v_personnage.constitution)
+        );
+
+        UPDATE personnages
+        SET xp = v_xp_total::int,
+            niveau = greatest(niveau, v_niveau),
+            pv_max = pv_max + v_gain_pv
+        WHERE id = v_personnage.id;
+    END LOOP;
+END;
+$$;
 
 
 -- =====================================================================
 --  4. TRIGGERS                                       (Membre 2)
---  À faire : charge max, pas de jet pour un mort, journal des PV
 -- =====================================================================
+
+CREATE OR REPLACE FUNCTION verifier_charge()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    v_nom       varchar(80);
+    v_force     smallint;
+    v_poids     numeric(10,2);
+    v_charge    numeric(10,2);
+    v_autorise  numeric(10,1);
+BEGIN
+    SELECT nom, force, force * 7.5
+    INTO v_nom, v_force, v_autorise
+    FROM personnages
+    WHERE id = NEW.personnage_id;
+
+    SELECT poids_kg INTO v_poids
+    FROM objets
+    WHERE id = NEW.objet_id;
+
+    IF TG_OP = 'UPDATE' THEN
+        SELECT coalesce(sum(i.quantite * o.poids_kg), 0)
+        INTO v_charge
+        FROM inventaire AS i
+        JOIN objets AS o ON o.id = i.objet_id
+        WHERE i.personnage_id = NEW.personnage_id
+          AND (i.personnage_id, i.objet_id)
+              IS DISTINCT FROM (OLD.personnage_id, OLD.objet_id);
+    ELSE
+        SELECT coalesce(sum(i.quantite * o.poids_kg), 0)
+        INTO v_charge
+        FROM inventaire AS i
+        JOIN objets AS o ON o.id = i.objet_id
+        WHERE i.personnage_id = NEW.personnage_id;
+    END IF;
+    v_poids := v_charge + NEW.quantite * v_poids;
+
+    IF v_nom IS NOT NULL AND v_poids > v_autorise THEN
+        RAISE EXCEPTION '% ne peut pas porter ça : % kg pour % kg autorisés (Force %).',
+            v_nom, to_char(v_poids, 'FM999999990.00'),
+            to_char(v_autorise, 'FM999999990.0'), v_force;
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_verifier_charge
+BEFORE INSERT OR UPDATE ON inventaire
+FOR EACH ROW
+EXECUTE FUNCTION verifier_charge();
+
+CREATE OR REPLACE FUNCTION interdire_jet_mort()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    v_nom varchar(80);
+    v_statut varchar(12);
+BEGIN
+    SELECT nom, statut INTO v_nom, v_statut
+    FROM personnages
+    WHERE id = NEW.personnage_id;
+
+    IF v_statut = 'mort' THEN
+        RAISE EXCEPTION 'Impossible de lancer un dé : % est mort', v_nom;
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_interdire_jet_mort
+BEFORE INSERT ON jets_de_des
+FOR EACH ROW
+EXECUTE FUNCTION interdire_jet_mort();
+
+CREATE OR REPLACE FUNCTION journaliser_pv()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+    INSERT INTO journal_pv (personnage_id, ancien_pv, nouveau_pv, motif, auteur)
+    VALUES (
+        NEW.id,
+        OLD.pv_actuels,
+        NEW.pv_actuels,
+        coalesce(nullif(current_setting('grimoire.motif', true), ''), 'modification directe'),
+        coalesce(nullif(current_setting('role'), 'none'), session_user)
+    );
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_journaliser_pv
+AFTER UPDATE OF pv_actuels ON personnages
+FOR EACH ROW
+WHEN (OLD.pv_actuels IS DISTINCT FROM NEW.pv_actuels)
+EXECUTE FUNCTION journaliser_pv();
 
 
 -- =====================================================================
