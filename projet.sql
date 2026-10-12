@@ -716,5 +716,13 @@ GRANT USAGE ON SEQUENCE personnages_id_seq TO maitre_du_jeu;
 
 -- =====================================================================
 --  7. INDEX                                          (Membre 4)
---  À faire : idx_jets_personnage_date, idx_jets_critiques
 -- =====================================================================
+
+CREATE INDEX idx_jets_personnage_date
+    ON jets_de_des (personnage_id, lance_le DESC);
+
+CREATE INDEX idx_jets_critiques
+    ON jets_de_des (lance_le DESC)
+    WHERE faces = 20 AND resultat = 20;
+
+ANALYZE jets_de_des;

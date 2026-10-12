@@ -78,8 +78,42 @@ Pour le bon fonctionnement des vues, `modificateur(int)` est exécutable par les
 
 ## Index
 
-_À rédiger par le membre 4 : la requête, le plan et le temps avant, puis après._
+Le membre 4 a ajouté deux index sur la table qui grossit le plus : `jets_de_des`.
+
+1. `idx_jets_personnage_date` sur `(personnage_id, lance_le DESC)` :
+   ```sql
+   EXPLAIN ANALYZE
+   SELECT *
+   FROM jets_de_des
+   WHERE personnage_id = 1
+   ORDER BY lance_le DESC
+   LIMIT 20;
+   ```
+   Lors de la mesure locale, avant l'index, le plan utilisait un `Parallel Seq Scan` sur 500 000 lignes : `Execution Time: 18.517 ms`.
+   Après création de l'index, le plan passe à un `Index Scan` : `Execution Time: 0.134 ms`.
+   C'est exactement la requête de l'historique de jets affiché dans la page web.
+
+2. `idx_jets_critiques` partiel sur `(lance_le DESC)` avec `WHERE faces = 20 AND resultat = 20` :
+   ```sql
+   EXPLAIN ANALYZE
+   SELECT *
+   FROM jets_de_des
+   WHERE faces = 20 AND resultat = 20
+   ORDER BY lance_le DESC
+   LIMIT 10;
+   ```
+   Avant l'index, le plan utilisait encore un `Parallel Seq Scan` sur la table complète : `Execution Time: 31.290 ms`.
+   Après création de l'index partiel, le plan passe en `Index Scan` : `Execution Time: 0.062 ms`.
+   L'index ne couvre qu'environ 1 % des lignes, mais la limite de 10 derniers 20 naturels est très sensible au tri par date.
+
+Ces mesures sont un relevé de `EXPLAIN ANALYZE` local; les durées exactes varient selon la machine et l'état du cache, mais le plan passe d'un scan séquentiel parallèle à un scan d'index. Les index sont créés dans `projet.sql` dans la section 7, puis un `ANALYZE` termine la mise à jour des statistiques.
 
 ## Page Vercel
 
-_À rédiger par le membre 4 : lien, et comment la page n'utilise que le rôle `maitre_du_jeu`._
+Le dossier `web/` contient une application Next.js (App Router) avec le paquet `postgres` pour se connecter à Neon/Vercel. Configurez `DATABASE_URL` avec le compte `mj_elminster` (après avoir changé son mot de passe par défaut) ainsi que `BASIC_AUTH_USER` et `BASIC_AUTH_PASSWORD` dans les variables d'environnement de Vercel. Le déploiement doit utiliser `web/` comme dossier racine.
+
+`web/proxy.js` protège l'application avec une authentification HTTP Basic. Si les variables d'authentification ne sont pas configurées, la page répond avec une erreur au lieu d'utiliser des identifiants par défaut.
+
+La page permet de choisir une campagne, affiche les fiches en cartes avec leur barre de PV et leur statut, et présente les derniers jets et entrées du journal. Les actions « dégâts », « soin » et « lancer un d20 » appellent respectivement `modifier_pv` et `lancer_de`. Les erreurs PostgreSQL, dont celles émises par les triggers, sont affichées dans la page. Les lectures utilisent les vues ; les actions utilisent uniquement les procédures et fonctions prévues. Aucun accès direct aux tables n'est nécessaire depuis l'application.
+
+Aucun lien de déploiement n'est publié pour l'instant. Pour lancer la page localement, créez `web/.env.local` à partir de `web/.env.example`, renseignez les secrets localement (ne les commitez pas) et réglez `DATABASE_SSL=disable` pour le conteneur Docker local ; gardez `DATABASE_SSL=require` avec Neon. Exécutez ensuite `npm install` et `npm run dev` depuis `web/`.
