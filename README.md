@@ -110,10 +110,10 @@ Ces mesures sont un relevé de `EXPLAIN ANALYZE` local; les durées exactes vari
 
 ## Page Vercel
 
-Le dossier `web/` contient une application Next.js (App Router) avec le paquet `postgres` pour se connecter à Neon/Vercel. Configurez `DATABASE_URL` avec le compte `mj_elminster` (après avoir changé son mot de passe par défaut) ainsi que `BASIC_AUTH_USER` et `BASIC_AUTH_PASSWORD` dans les variables d'environnement de Vercel. Le déploiement doit utiliser `web/` comme dossier racine.
+Le dossier `web/` contient une page **React (Vite)** et une petite **API** de fonctions serverless Vercel (`web/api/`). Le navigateur n'appelle que l'API, et seule l'API connaît `DATABASE_URL`, ce qui garde le mot de passe de la base hors du navigateur. L'API se connecte en `mj_elminster` et ne passe que par les vues et les procédures : aucun accès direct aux tables.
 
-`web/proxy.js` protège l'application avec une authentification HTTP Basic. Si les variables d'authentification ne sont pas configurées, la page répond avec une erreur au lieu d'utiliser des identifiants par défaut.
+La page permet de choisir une campagne, affiche les fiches en cartes avec leur barre de PV et leur statut, et présente les derniers jets et le journal des PV. Les boutons « dégâts », « soin » et « lancer un d20 » appellent `modifier_pv` et `lancer_de`. Quand un trigger refuse une action, son message s'affiche en rouge sur la page.
 
-La page permet de choisir une campagne, affiche les fiches en cartes avec leur barre de PV et leur statut, et présente les derniers jets et entrées du journal. Les actions « dégâts », « soin » et « lancer un d20 » appellent respectivement `modifier_pv` et `lancer_de`. Les erreurs PostgreSQL, dont celles émises par les triggers, sont affichées dans la page. Les lectures utilisent les vues ; les actions utilisent uniquement les procédures et fonctions prévues. Aucun accès direct aux tables n'est nécessaire depuis l'application.
+> **En cours** : l'API (`web/api/`, `web/middleware.js`) reste à écrire ; son contrat est dans [web/API.md](web/API.md).
 
-Aucun lien de déploiement n'est publié pour l'instant. Pour lancer la page localement, créez `web/.env.local` à partir de `web/.env.example`, renseignez les secrets localement (ne les commitez pas) et réglez `DATABASE_SSL=disable` pour le conteneur Docker local ; gardez `DATABASE_SSL=require` avec Neon. Exécutez ensuite `npm install` et `npm run dev` depuis `web/`.
+Déploiement : sur Vercel, dossier racine `web/`, avec les variables `DATABASE_URL` (compte `mj_elminster`, mot de passe changé avec `ALTER ROLE`), `BASIC_AUTH_USER` et `BASIC_AUTH_PASSWORD`. Aucun lien n'est publié pour l'instant.
