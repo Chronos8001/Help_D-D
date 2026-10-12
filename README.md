@@ -1,85 +1,79 @@
 # Grimoire · fiches de personnage Donjons & Dragons
 
-Une base PostgreSQL qui gère les fiches de personnage d'une table de D&D 5e : joueurs, campagnes,
-personnages, inventaire et jets de dés. Le maître du jeu mène la partie, les joueurs consultent les fiches.
+Le Grimoire rassemble la base PostgreSQL du projet et une application web responsive pour consulter les campagnes et les personnages. Le MJ dispose aussi d’outils pour créer une campagne ou une fiche, ajuster les PV, distribuer de l’XP et lancer les dés.
 
-**Groupe** : _Prénom Nom_ (tables et données) · _Prénom Nom_ (fonctions et triggers) ·
-_Prénom Nom_ (vues et rôles) · _Prénom Nom_ (index et page web)
+## Lancer en local
 
-## Lancer le projet
+Prérequis : Docker Compose et Node.js 20 ou plus.
+
+1. Démarrer PostgreSQL puis créer les tables et les données de démo :
+
+   ```sh
+   docker compose up -d
+   sh rejouer.sh
+   ```
+
+2. Créer le compte limité utilisé par l’API. Choisir un mot de passe long et le fournir à `psql` :
+
+   ```sh
+   docker compose cp api-permissions.sql db:/tmp/api-permissions.sql
+   # PowerShell
+   $env:GRIMOIRE_API_PASSWORD = "choisir-un-mot-de-passe-long"
+   docker compose exec -e GRIMOIRE_API_PASSWORD -T db psql -U dnd -d projet -f /tmp/api-permissions.sql
+   ```
+
+   Utiliser le même mot de passe dans `DATABASE_URL`. Relancer cette étape après `sh rejouer.sh`, qui recrée la base. Le rôle API et ses permissions sont créés par `api-permissions.sql`.
+
+3. Copier `.env.example` vers `.env`, puis remplacer le mot de passe de `DATABASE_URL` et `APP_MJ_TOKEN` par des secrets uniques. `APP_MJ_TOKEN` est la clé privée que le MJ saisira dans l’interface.
+
+4. Pour lancer l’API en local, démarrer le serveur :
+
+   ```sh
+   npm install
+   npm start
+   ```
+
+   L’API répond sur [http://localhost:3000](http://localhost:3000). Servir séparément le dossier `public/` sur `http://localhost:8080` (par exemple `npx http-server public -p 8080`) et ouvrir cette adresse pour afficher le site. `public/config.js` pointe par défaut sur l’API locale. La clé MJ n’est jamais stockée dans le dépôt ; elle reste dans la session du navigateur jusqu’à sa fermeture ou à la déconnexion.
+
+## Héberger l’application sur Internet
+
+Le site statique et l’API sont deux déploiements indépendants et ont chacun leur adresse. Le serveur Node.js ne sert que l’API REST ; le dossier `public/` contient le site statique.
+
+1. Créer une base PostgreSQL managée et exécuter `projet.sql` dessus. Le script de démonstration charge 500 000 jets de dés.
+2. Exécuter `api-permissions.sql` avec un mot de passe fort fourni dans `GRIMOIRE_API_PASSWORD`. Utiliser ce même mot de passe dans `DATABASE_URL`.
+3. Déployer le dépôt comme service web Docker avec le `Dockerfile`. Configurer les variables serveur `DATABASE_URL`, `DATABASE_SSL=true`, `APP_MJ_TOKEN` et `FRONTEND_ORIGIN`. `FRONTEND_ORIGIN` doit être l’origine HTTPS du site statique (par exemple `https://grimoire.example.com`), sans chemin final. Utiliser l’URL TLS fournie par la base.
+4. Déployer le contenu de `public/` comme site statique chez un hébergeur web (par exemple un service Static Site). Dans `public/config.js`, remplacer `http://localhost:3000` par l’URL HTTPS de l’API (par exemple `https://grimoire-api.example.com`), puis republier le site.
+5. Ouvrir l’adresse du site statique et transmettre `APP_MJ_TOKEN` uniquement au MJ. L’API n’autorise les requêtes du navigateur que depuis l’origine définie par `FRONTEND_ORIGIN`.
+
+Ne pas utiliser les mots de passe d’exemple du `docker-compose.yml` en production, ni exposer directement le port PostgreSQL à Internet. La configuration du service doit fournir les secrets hors du dépôt.
+
+## Interface et API
+
+- Les visiteurs peuvent parcourir les campagnes actives ou terminées et consulter les fiches des personnages joueurs.
+- Les actions MJ nécessitent la clé `APP_MJ_TOKEN`. Elles couvrent la création de campagnes et de personnages, l’activation/fermeture de campagnes, les ajustements de PV, la distribution d’XP et les jets de dés.
+- Les joueurs ne disposent pas encore de comptes applicatifs individuels : la consultation des fiches joueurs est en lecture seule et utilise la vue `vue_fiches_joueurs`. Les fiches MJ utilisent `vue_table_mj`, mais l’API n’en sélectionne jamais la colonne `notes_mj`.
+- Les règles de poids, de PV, de niveaux et de jets restent appliquées par PostgreSQL (triggers et procédures). L’API emploie des requêtes paramétrées et le rôle dédié décrit dans `api-permissions.sql`.
+
+Les réponses utilisent du JSON sous la forme `{ "data": ... }` ; une erreur renvoie `{ "error": "..." }`. Les routes de gestion requièrent l’en-tête `Authorization: Bearer <APP_MJ_TOKEN>`. Les routes listées ci-dessous sont servies par l’adresse de l’API, séparée de celle du site.
+
+| Méthode | Route | Accès | Action |
+| --- | --- | --- | --- |
+| `GET` | `/api/health` | Public | Vérifier l’accès à la base |
+| `GET` | `/api/campaigns` | Public | Lister les campagnes |
+| `GET` | `/api/references` | Public | Lister joueurs, races et classes |
+| `GET` | `/api/characters?campagneId=1` | Public | Lister les fiches joueurs, avec filtre facultatif |
+| `GET` | `/api/gm/characters` | MJ | Lister les personnages, PNJ inclus |
+| `POST` | `/api/gm/characters` | MJ | Créer une fiche |
+| `POST` | `/api/gm/campaigns` | MJ | Créer une campagne |
+| `PATCH` | `/api/gm/campaigns/:id` | MJ | Modifier son état `{ "active": false }` |
+| `POST` | `/api/gm/characters/:id/pv` | MJ | Ajuster les PV `{ "delta": -5, "motif": "Gobelin" }` |
+| `POST` | `/api/gm/campaigns/:id/xp` | MJ | Distribuer `{ "xp": 100 }` à la campagne |
+| `POST` | `/api/gm/rolls` | MJ | Lancer un dé `{ "personnage_id": 1, "faces": 20, "type_jet": "attaque", "carac": "FOR" }` |
+
+## La base de données
+
+Le schéma gère les joueurs, campagnes, races, classes, personnages, objets, inventaires et historiques de jets et de PV. Le script `projet.sql` comprend également les fonctions et procédures métier, les triggers, les vues et les rôles PostgreSQL.
 
 ```sh
-docker compose up -d     # Postgres 16 sur le port 5433
-sh rejouer.sh            # repart d'une base vide et exécute projet.sql
 docker compose exec db psql -U dnd -d projet
 ```
-
-Avec le conteneur du festival, suivez la recette du sujet en copiant `projet.sql`.
-
----
-
-## Les données
-
-**Ce qu'elles contiennent** : 8 tables. `joueurs`, `campagnes`, `races`, `classes` et `objets` sont les tables
-de référence. `personnages` est la fiche. `inventaire` relie personnages et objets. `jets_de_des` et
-`journal_pv` gardent l'historique. 200 personnages (dont un PNJ et un mort pour les démos) et
-**500 000 jets de dés** sont générés avec `generate_series`.
-
-**Pourquoi** : les jets de dés sont la table qui grossit vraiment pendant une partie, c'est donc elle
-qui sert aux mesures d'index. Les PV et l'XP générés suivent les règles D&D 5e (dé de vie + mod(CON)),
-les fiches sont donc cohérentes.
-
-**La preuve** : `SELECT count(*) FROM jets_de_des;` → 500 000.
-`SELECT nom, statut, pv_actuels, pv_max FROM personnages WHERE campagne_id = 1;` → le groupe de démo.
-
-## Fonctions et procédures
-
-`modificateur(score)` applique l'arrondi vers le bas de la règle D&D 5e : 10 donne 0, 16 donne +3 et 8 donne −1. `lancer_de(p_perso, p_faces, p_type, p_carac)` tire le dé, ajoute le modificateur de caractéristique si elle est fournie, enregistre le jet et renvoie le total.
-
-`modifier_pv(p_perso, p_delta, p_motif)` centralise dégâts et soins. Les PV sont bornés entre 0 et `pv_max` ; à 0 le personnage est inconscient, sauf si les dégâts excédentaires atteignent `pv_max`, auquel cas il meurt. Un soin réveille un inconscient, mais soigner un mort renvoie une erreur. Chaque changement est transmis au trigger avec son motif.
-
-La procédure bonus `distribuer_xp(p_campagne, p_xp)` ajoute l'XP aux personnages non morts de la campagne et applique les paliers D&D 5e jusqu'au niveau 20. Chaque niveau gagné augmente les PV maximums selon le dé de vie de la classe et le modificateur de Constitution.
-
-Ces opérations sont `SECURITY DEFINER` : le MJ peut les appeler sans recevoir de droits directs sur les tables. Vérifications dans `psql` après `SET ROLE mj_elminster` :
-
-```sql
-SELECT modificateur(8), modificateur(10), modificateur(16); -- -1, 0, 3
-SELECT lancer_de(1, 20, 'attaque', 'FOR');
-CALL modifier_pv(1, -8, 'Gobelin');
-SELECT personnage_id, ancien_pv, nouveau_pv, motif, auteur
-FROM vue_mj_journal ORDER BY le DESC LIMIT 1;
-```
-
-## Triggers
-
-Trois triggers appliquent des règles communes à tous les clients. `trg_verifier_charge` refuse un ajout ou une modification d'inventaire qui ferait dépasser Force × 7,5 kg, avec le poids porté et la limite dans l'erreur. `trg_interdire_jet_mort` bloque tout jet créé pour un personnage mort. `trg_journaliser_pv` écrit l'ancien et le nouveau total de PV, le motif et l'auteur à chaque changement effectif.
-
-Ces règles vivent dans PostgreSQL plutôt que seulement dans l'application : `psql`, la page Vercel et un éventuel bot Discord passent ainsi par les mêmes contrôles. Les fonctions de trigger sont `SECURITY DEFINER`, car elles doivent consulter ou écrire des tables auxquelles le rôle MJ n'a pas accès directement. Le journal récupère le rôle actif, ou la session de connexion si aucun `SET ROLE` n'est utilisé.
-
-Tests utiles : `CALL modifier_pv(1, -8, 'Gobelin')` produit une entrée de journal ; `SELECT lancer_de(6, 20, 'attaque')` échoue car Grok est mort ; donner l'« Enclume de forgeron » à Thorin échoue car sa charge dépasserait sa limite.
-
-## Vues
-
-Les vues du membre 3 centralisent l'affichage métier sans donner d'accès direct sur les tables.
-
-- `vue_table_mj` est la vue de travail du MJ : elle expose la fiche complète de `personnages`, avec les libellés de race, classe et campagne, les six modificateurs D&D (`modificateur(force)`, `modificateur(dexterite)`, etc.) et le `de_vie`. Elle est construite sur une seule table (`personnages`) dans le `FROM`, ce qui laisse PostgreSQL la rendre modifiable automatiquement pour les champs de la table, notamment `notes_mj`.
-- `vue_mj_inventaire` reprend `inventaire` et ajoute le nom et le poids de l'objet via des sous-requêtes scalaires. Le MJ peut l'utiliser pour insérer, mettre à jour ou supprimer une ligne d'inventaire, tout en conservant le trigger de charge sur `inventaire`.
-- `vue_mj_jets` et `vue_mj_journal` sont des vues en lecture seule. Elles ajoutent le nom du personnage associé à chaque jet ou entrée de journal pour un historique exploitable dans l'interface de jeu.
-- `vue_fiches_joueurs` ne montre que les personnages ayant un `joueur_id` non nul. Elle exclut `notes_mj`, donc le contenu réservé au MJ reste caché. Elle ne renvoie pas non plus les PNJ (`personnages.joueur_id IS NULL`), ce qui limite l'exposition aux fiches publiques des joueurs.
-
-## Rôles
-
-Les droits sont attribués aux rôles métier, pas aux comptes humains. Cela évite d'avoir à gérer des autorisations répétées et permet de faire évoluer les accès de façon claire.
-
-- `maitre_du_jeu` : rôle du MJ. Il peut consulter toutes les vues du MJ et modifier via ses vues ; `SET ROLE mj_elminster;` puis `CALL modifier_pv(1, -8, 'Gobelin');` est autorisé. En revanche, `DELETE FROM personnages;` est refusée parce que les tables restent inaccessibles directement.
-- `joueur` : rôle des joueurs. `SET ROLE joueur_pip; SELECT * FROM vue_fiches_joueurs;` est autorisé. La requête `SELECT notes_mj FROM personnages;` est refusée, et `CALL modifier_pv(1, -8, 'Gobelin');` est également bloquée.
-
-Pour le bon fonctionnement des vues, `modificateur(int)` est exécutable par les deux rôles. Les autres fonctions de la base sont restreintes à `maitre_du_jeu` pour que les procédures métier restent centralisées dans PostgreSQL au lieu d'être laissées à des accès directs sur `personnages` ou `inventaire`.
-
-## Index
-
-_À rédiger par le membre 4 : la requête, le plan et le temps avant, puis après._
-
-## Page Vercel
-
-_À rédiger par le membre 4 : lien, et comment la page n'utilise que le rôle `maitre_du_jeu`._
