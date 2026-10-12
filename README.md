@@ -1,10 +1,10 @@
 # Grimoire · fiches de personnage Donjons & Dragons
 
-Le Grimoire rassemble la base PostgreSQL du projet et une application web responsive pour consulter les campagnes et les personnages. Le MJ dispose aussi d’outils pour créer une campagne ou une fiche, ajuster les PV, distribuer de l’XP et lancer les dés.
+Le Grimoire rassemble la base PostgreSQL du projet et une application web responsive pour consulter les campagnes et les personnages. Le MJ dispose aussi d’outils pour créer des campagnes et des fiches, ajuster les PV, distribuer de l’XP et lancer des dés.
 
 ## Lancer en local
 
-Prérequis : Docker Compose et Node.js 20 ou plus.
+Prérequis : Docker Desktop, Git Bash et Node.js 20 ou plus.
 
 1. Démarrer PostgreSQL puis créer les tables et les données de démo :
 
@@ -13,67 +13,72 @@ Prérequis : Docker Compose et Node.js 20 ou plus.
    sh rejouer.sh
    ```
 
-2. Créer le compte limité utilisé par l’API. Choisir un mot de passe long et le fournir à `psql` :
+2. Créer le compte PostgreSQL limité utilisé par l’API :
 
-   ```sh
+   ```powershell
    docker compose cp api-permissions.sql db:/tmp/api-permissions.sql
-   # PowerShell
    $env:GRIMOIRE_API_PASSWORD = "choisir-un-mot-de-passe-long"
    docker compose exec -e GRIMOIRE_API_PASSWORD -T db psql -U dnd -d projet -f /tmp/api-permissions.sql
    ```
 
-   Utiliser le même mot de passe dans `DATABASE_URL`. Relancer cette étape après `sh rejouer.sh`, qui recrée la base. Le rôle API et ses permissions sont créés par `api-permissions.sql`.
+   Utiliser ce même mot de passe dans `DATABASE_URL`. Relancer cette étape après `sh rejouer.sh`, qui recrée la base.
 
-3. Copier `.env.example` vers `.env`, puis remplacer le mot de passe de `DATABASE_URL` et `APP_MJ_TOKEN` par des secrets uniques. `APP_MJ_TOKEN` est la clé privée que le MJ saisira dans l’interface.
+3. Copier `.env.example` vers `.env`, puis remplacer le mot de passe de `DATABASE_URL` et `APP_MJ_TOKEN` par des secrets uniques.
+4. Démarrer l’API dans un terminal PowerShell :
 
-4. Pour lancer l’API en local, démarrer le serveur :
-
-   ```sh
+   ```powershell
    npm install
    npm start
    ```
 
-   L’API répond sur [http://localhost:3000](http://localhost:3000). Servir séparément le dossier `public/` sur `http://localhost:8080` (par exemple `npx http-server public -p 8080`) et ouvrir cette adresse pour afficher le site. `public/config.js` pointe par défaut sur l’API locale. La clé MJ n’est jamais stockée dans le dépôt ; elle reste dans la session du navigateur jusqu’à sa fermeture ou à la déconnexion.
+5. Servir le site depuis un autre terminal PowerShell :
 
-## Héberger l’application sur Internet
+   ```powershell
+   npx --yes http-server public -p 8080
+   ```
 
-Le site statique et l’API sont deux déploiements indépendants et ont chacun leur adresse. Le serveur Node.js ne sert que l’API REST ; le dossier `public/` contient le site statique.
+   Ouvrir `http://localhost:8080`. `public/config.js` pointe par défaut vers l’API locale sur le port 3000. La clé MJ reste dans la session du navigateur jusqu’à sa fermeture ou à la déconnexion.
 
-1. Créer une base PostgreSQL managée et exécuter `projet.sql` dessus. Le script de démonstration charge 500 000 jets de dés.
-2. Exécuter `api-permissions.sql` avec un mot de passe fort fourni dans `GRIMOIRE_API_PASSWORD`. Utiliser ce même mot de passe dans `DATABASE_URL`.
-3. Déployer le dépôt comme service web Docker avec le `Dockerfile`. Configurer les variables serveur `DATABASE_URL`, `DATABASE_SSL=true`, `APP_MJ_TOKEN` et `FRONTEND_ORIGIN`. `FRONTEND_ORIGIN` doit être l’origine HTTPS du site statique (par exemple `https://grimoire.example.com`), sans chemin final. Utiliser l’URL TLS fournie par la base.
-4. Déployer le contenu de `public/` comme site statique chez un hébergeur web (par exemple un service Static Site). Dans `public/config.js`, remplacer `http://localhost:3000` par l’URL HTTPS de l’API (par exemple `https://grimoire-api.example.com`), puis republier le site.
-5. Ouvrir l’adresse du site statique et transmettre `APP_MJ_TOKEN` uniquement au MJ. L’API n’autorise les requêtes du navigateur que depuis l’origine définie par `FRONTEND_ORIGIN`.
+## Héberger sur Internet
 
-Ne pas utiliser les mots de passe d’exemple du `docker-compose.yml` en production, ni exposer directement le port PostgreSQL à Internet. La configuration du service doit fournir les secrets hors du dépôt.
+Le site statique et l’API sont deux déploiements indépendants. Le serveur Node.js ne sert que l’API ; `public/` contient l’interface web.
+
+1. Créer une base PostgreSQL managée et y exécuter `projet.sql`.
+2. Exécuter `api-permissions.sql` avec un mot de passe fort fourni dans `GRIMOIRE_API_PASSWORD`. Utiliser ce mot de passe dans `DATABASE_URL`.
+3. Déployer l’API avec le `Dockerfile`. Configurer `DATABASE_URL`, `DATABASE_SSL=true`, `APP_MJ_TOKEN` et `FRONTEND_ORIGIN` dans les secrets du service. `FRONTEND_ORIGIN` est l’origine HTTPS du site statique, sans chemin final.
+4. Déployer `public/` chez un hébergeur de site statique. Modifier `public/config.js` pour pointer sur l’URL HTTPS de l’API, puis republier le site.
+5. Transmettre `APP_MJ_TOKEN` uniquement au MJ. L’API n’autorise les requêtes navigateur que depuis l’origine configurée.
+
+Ne pas utiliser les mots de passe d’exemple du `docker-compose.yml` en production et ne pas exposer directement PostgreSQL à Internet.
 
 ## Interface et API
 
-- Les visiteurs peuvent parcourir les campagnes actives ou terminées et consulter les fiches des personnages joueurs.
-- Les actions MJ nécessitent la clé `APP_MJ_TOKEN`. Elles couvrent la création de campagnes et de personnages, l’activation/fermeture de campagnes, les ajustements de PV, la distribution d’XP et les jets de dés.
-- Les joueurs ne disposent pas encore de comptes applicatifs individuels : la consultation des fiches joueurs est en lecture seule et utilise la vue `vue_fiches_joueurs`. Les fiches MJ utilisent `vue_table_mj`, mais l’API n’en sélectionne jamais la colonne `notes_mj`.
-- Les règles de poids, de PV, de niveaux et de jets restent appliquées par PostgreSQL (triggers et procédures). L’API emploie des requêtes paramétrées et le rôle dédié décrit dans `api-permissions.sql`.
+Les visiteurs peuvent parcourir les campagnes et consulter les fiches des personnages joueurs. Les actions MJ nécessitent `APP_MJ_TOKEN` : créer des campagnes et des fiches, clôturer une campagne, ajuster les PV, distribuer de l’XP ou lancer des dés.
 
-Les réponses utilisent du JSON sous la forme `{ "data": ... }` ; une erreur renvoie `{ "error": "..." }`. Les routes de gestion requièrent l’en-tête `Authorization: Bearer <APP_MJ_TOKEN>`. Les routes listées ci-dessous sont servies par l’adresse de l’API, séparée de celle du site.
+Il n’y a pas encore de comptes joueurs individuels : les fiches publiques utilisent la vue `vue_fiches_joueurs`. Les notes privées du MJ ne sont pas renvoyées par l’API. Les règles de PV, d’XP et de jets restent appliquées par PostgreSQL ; les requêtes de l’API sont paramétrées.
+
+Toutes les réponses sont au format JSON. Les routes MJ exigent `Authorization: Bearer <APP_MJ_TOKEN>`.
 
 | Méthode | Route | Accès | Action |
 | --- | --- | --- | --- |
 | `GET` | `/api/health` | Public | Vérifier l’accès à la base |
 | `GET` | `/api/campaigns` | Public | Lister les campagnes |
 | `GET` | `/api/references` | Public | Lister joueurs, races et classes |
-| `GET` | `/api/characters?campagneId=1` | Public | Lister les fiches joueurs, avec filtre facultatif |
+| `GET` | `/api/characters?campagneId=1` | Public | Lister les fiches joueurs, filtre facultatif |
 | `GET` | `/api/gm/characters` | MJ | Lister les personnages, PNJ inclus |
 | `POST` | `/api/gm/characters` | MJ | Créer une fiche |
 | `POST` | `/api/gm/campaigns` | MJ | Créer une campagne |
-| `PATCH` | `/api/gm/campaigns/:id` | MJ | Modifier son état `{ "active": false }` |
-| `POST` | `/api/gm/characters/:id/pv` | MJ | Ajuster les PV `{ "delta": -5, "motif": "Gobelin" }` |
-| `POST` | `/api/gm/campaigns/:id/xp` | MJ | Distribuer `{ "xp": 100 }` à la campagne |
-| `POST` | `/api/gm/rolls` | MJ | Lancer un dé `{ "personnage_id": 1, "faces": 20, "type_jet": "attaque", "carac": "FOR" }` |
+| `PATCH` | `/api/gm/campaigns/:id` | MJ | Modifier l’état d’une campagne |
+| `POST` | `/api/gm/characters/:id/pv` | MJ | Ajuster les PV |
+| `POST` | `/api/gm/campaigns/:id/xp` | MJ | Distribuer de l’XP |
+| `POST` | `/api/gm/rolls` | MJ | Lancer un dé |
 
-## La base de données
+## Données et index
 
-Le schéma gère les joueurs, campagnes, races, classes, personnages, objets, inventaires et historiques de jets et de PV. Le script `projet.sql` comprend également les fonctions et procédures métier, les triggers, les vues et les rôles PostgreSQL.
+`projet.sql` initialise le schéma, les fonctions, les procédures, les triggers, les vues, les rôles et les index. Les données de démonstration comprennent 200 personnages et 500 000 jets de dés.
 
-```sh
-docker compose exec db psql -U dnd -d projet
-```
+Deux index accélèrent la recherche des jets par personnage et par date (`idx_jets_personnage_date`) et celle des 20 naturels (`idx_jets_critiques`). `demo.sql` présente les vues et le trigger des jets interdits pour un personnage mort, ainsi que des mesures `EXPLAIN ANALYZE` avant/après indexation. Il supprime et recrée les deux index pendant la démonstration.
+
+## Prototype Vite historique
+
+Le dossier `web/` contient également une seconde interface React/Vite et le contrat envisagé pour son API dans `web/API.md`. Cette interface utilise d’autres routes (`/api/campagnes`, `/api/table`, `/api/action`) qui ne sont pas fournies par le serveur Express à la racine. Elle est donc indépendante et n’est pas prête à être déployée ; pour utiliser l’application fonctionnelle, suivre les étapes ci-dessus avec `public/` et le serveur Node.js.
