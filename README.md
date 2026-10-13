@@ -58,7 +58,7 @@ Prérequis : Docker Desktop, Git Bash et Node.js 20 ou plus.
    npx --yes http-server public -p 8080
    ```
 
-   Ouvrir `http://localhost:8080` : sans session, le site redirige vers la page de connexion (`login.html`). `public/config.js` pointe par défaut vers l’API locale sur le port 3000. La session dure 12 heures et reste dans l’onglet jusqu’à sa fermeture ou à la déconnexion. Si le port 8080 est déjà pris, utiliser un autre port et l’indiquer dans `FRONTEND_ORIGIN`.
+   Ouvrir `http://localhost:8080` : sans session, le site redirige vers la page de connexion (`login.html`). `public/config.js` utilise l’API locale sur le port 3000 pour `localhost` et l’API Vercel ailleurs. La session dure 12 heures et reste dans l’onglet jusqu’à sa fermeture ou à la déconnexion. Si le port 8080 est déjà pris, utiliser un autre port et l’indiquer dans `FRONTEND_ORIGIN`.
 
 ## Héberger sur Internet
 
@@ -66,9 +66,9 @@ Le site statique et l’API sont deux déploiements indépendants. Le serveur No
 
 1. Créer une base PostgreSQL managée et y exécuter `projet.sql` puis `comptes.sql`.
 2. Exécuter `api-permissions.sql` avec un mot de passe fort fourni dans `GRIMOIRE_API_PASSWORD`. Utiliser ce mot de passe dans `DATABASE_URL`.
-3. Déployer l’API avec le `Dockerfile`. Configurer `DATABASE_URL`, `DATABASE_SSL=true` et `FRONTEND_ORIGIN` dans les secrets du service. `FRONTEND_ORIGIN` est l’origine HTTPS du site statique, sans chemin final.
-4. Déployer `public/` chez un hébergeur de site statique. Modifier `public/config.js` pour pointer sur l’URL HTTPS de l’API, puis republier le site.
-5. Créer le premier admin avec `npm run compte -- <identifiant> admin` (jamais `npm run comptes-demo`), lancé avec la même `DATABASE_URL`. L’API n’autorise les requêtes navigateur que depuis l’origine configurée.
+3. Déployer l’API avec le `Dockerfile` ou relier le dépôt GitHub à Vercel. Configurer `DATABASE_URL`, `DATABASE_SSL=true` et `FRONTEND_ORIGIN` dans les variables de production Vercel. `FRONTEND_ORIGIN` est l’origine HTTPS du site, sans chemin final. L’API Vercel utilise les fonctions d’entrée dans `api/`.
+4. Déployer `public/` chez un hébergeur de site statique ou avec le projet Vercel dont le dossier racine est `public/`. `public/config.js` utilise l’URL HTTPS de l’API en production et bascule vers `localhost:3000` en local.
+5. Créer le premier administrateur avec `npm run compte -- <identifiant> admin` (jamais `npm run comptes-demo`), lancé avec la même `DATABASE_URL`. L’API n’autorise les requêtes navigateur que depuis l’origine configurée.
 
 Ne pas utiliser les mots de passe d’exemple du `docker-compose.yml` en production et ne pas exposer directement PostgreSQL à Internet.
 
@@ -117,4 +117,3 @@ Toutes les réponses sont au format JSON. Les routes protégées exigent `Author
 `projet.sql` initialise le schéma, les fonctions, les procédures, les triggers, les vues, les rôles et les index. Les données de démonstration comprennent 4 campagnes de 4 personnages joueurs chacune, plus un PNJ et Grok, un personnage mort qui sert à la démo du trigger, ainsi que 500 000 jets de dés.
 
 Deux index accélèrent la recherche des jets par personnage et par date (`idx_jets_personnage_date`) et celle des 20 naturels (`idx_jets_critiques`). `demo.sql` présente les vues et le trigger des jets interdits pour un personnage mort, ainsi que des mesures `EXPLAIN ANALYZE` avant/après indexation. Il supprime et recrée les deux index pendant la démonstration.
-
