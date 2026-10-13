@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "start": "node src/server.js",
+    "compte": "node src/creer-compte.js",
+    "comptes-demo": "node src/comptes-demo.js",
     "test": "node --test"
   },
   "engines": {

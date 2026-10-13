@@ -3,12 +3,8 @@ import pg from 'pg';
 import { createApp } from './app.js';
 
 const { Pool } = pg;
-const required = ['DATABASE_URL', 'APP_MJ_TOKEN', 'FRONTEND_ORIGIN'];
+const required = ['DATABASE_URL', 'FRONTEND_ORIGIN'];
 const missing = required.filter((name) => !process.env[name]);
-
-if (process.env.APP_MJ_TOKEN && process.env.APP_MJ_TOKEN.length < 32) {
-  missing.push('APP_MJ_TOKEN (32 caractères minimum)');
-}
 
 if (missing.length > 0) {
   console.error(`Configuration manquante : ${missing.join(', ')}`);
@@ -39,7 +35,7 @@ try {
   process.exit(1);
 }
 
-const app = createApp({ pool, mjToken: process.env.APP_MJ_TOKEN, frontendOrigin });
+const app = createApp({ pool, frontendOrigin });
 const port = Number(process.env.PORT || 3000);
 const server = app.listen(port, () => {
   console.log(`Grimoire disponible sur le port ${port}`);

@@ -30,3 +30,9 @@ GRANT EXECUTE ON FUNCTION lancer_de(int, int, text, text) TO grimoire_api;
 GRANT EXECUTE ON PROCEDURE modifier_pv(int, int, text) TO grimoire_api;
 GRANT EXECUTE ON PROCEDURE distribuer_xp(int, int) TO grimoire_api;
 GRANT USAGE, SELECT ON SEQUENCE personnages_id_seq, campagnes_id_seq TO grimoire_api;
+
+-- Comptes et sessions de l'application web (comptes.sql).
+GRANT SELECT, INSERT, UPDATE, DELETE ON comptes TO grimoire_api;
+GRANT SELECT, INSERT, DELETE ON sessions TO grimoire_api;
+GRANT INSERT (pseudo) ON joueurs TO grimoire_api;
+GRANT USAGE, SELECT ON SEQUENCE comptes_id_seq, joueurs_id_seq TO grimoire_api;

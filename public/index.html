@@ -5,9 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#11130f">
     <meta name="description" content="Le grimoire de campagne : personnages, aventures et jets de dés pour votre table de Donjons & Dragons.">
-    <title>Le Grimoire — vos aventures prennent vie</title>
+    <title>Le Grimoire</title>
     <link rel="stylesheet" href="/styles.css">
     <script src="/config.js"></script>
+    <script src="/session.js"></script>
     <script src="/app.js" defer></script>
   </head>
   <body>
@@ -16,55 +17,118 @@
         <span class="brand-mark" aria-hidden="true">✦</span>
         <span>GRIMOIRE<small>REGISTRE D’AVENTURE</small></span>
       </a>
-      <button class="button button-quiet" id="open-mj-panel" type="button">Accès maître du jeu <span aria-hidden="true">↗</span></button>
+      <nav class="tabs" id="tabs" aria-label="Sections"></nav>
+      <div class="account-bar">
+        <span class="account-name" id="account-name"></span>
+        <button class="button button-quiet" id="logout" type="button">Se déconnecter</button>
+      </div>
     </header>
 
     <main>
-      <section class="hero">
-        <div class="hero-copy">
-          <p class="eyebrow"><span class="live-dot"></span> LE REGISTRE DE VOTRE TABLE</p>
-          <h1>Chaque légende<br>commence <em>ici.</em></h1>
-          <p class="hero-text">Retrouvez vos héros, suivez les campagnes et gardez le fil de l’aventure.</p>
-          <a class="button button-gold" href="#aventuriers">Découvrir les personnages <span aria-hidden="true">↓</span></a>
+      <p class="notice page-notice" id="notice" role="status" aria-live="polite">Chargement…</p>
+
+      <!-- Joueur : ses fiches et ses jets -->
+      <section class="view" id="view-personnages" hidden aria-labelledby="mine-title">
+        <div class="section-heading">
+          <div><p class="eyebrow">ESPACE JOUEUR</p><h2 id="mine-title">Mes personnages</h2></div>
+          <span class="section-note" id="mine-count"></span>
         </div>
-        <div class="hero-art" aria-hidden="true">
-          <div class="orbit orbit-one"></div>
-          <div class="orbit orbit-two"></div>
-          <div class="sigil">ᛟ</div>
-          <span class="spark spark-one">✦</span><span class="spark spark-two">✧</span><span class="spark spark-three">✦</span>
-          <span class="art-caption">ÉDITION <b>5e</b><br>DEPUIS LE PREMIER DÉ</span>
+        <div class="player-layout">
+          <div class="character-grid character-grid-compact" id="my-character-list"></div>
+          <form class="tool-card sticky-card" id="my-roll-form">
+            <h3>Lancer les dés</h3>
+            <label>Personnage <select name="personnage_id" required></select></label>
+            <div class="form-row">
+              <label>Action <select name="type_jet">
+                <option>attaque</option><option>dégâts</option><option>sauvegarde</option><option>compétence</option><option>initiative</option>
+              </select></label>
+              <label>Dé <select name="faces">
+                <option>20</option><option>4</option><option>6</option><option>8</option><option>10</option><option>12</option><option>100</option>
+              </select></label>
+            </div>
+            <label>Caractéristique <select name="carac">
+              <option value="">Aucun modificateur</option><option>FOR</option><option>DEX</option><option>CON</option><option>INT</option><option>SAG</option><option>CHA</option>
+            </select></label>
+            <button class="button button-gold" type="submit">Lancer le dé</button>
+            <p class="roll-result" id="my-roll-result" aria-live="polite"></p>
+          </form>
         </div>
       </section>
 
-      <section class="campaign-section" aria-labelledby="campaign-title">
+      <!-- Joueur : les compagnons de ses campagnes -->
+      <section class="view" id="view-groupe" hidden aria-labelledby="party-title">
         <div class="section-heading">
-          <div><p class="eyebrow">LES MONDES À EXPLORER</p><h2 id="campaign-title">Campagnes</h2></div>
-          <span class="section-note" id="campaign-count">Chargement…</span>
-        </div>
-        <div class="campaign-strip" id="campaign-list" aria-live="polite"></div>
-      </section>
-
-      <section class="characters-section" id="aventuriers" aria-labelledby="characters-title">
-        <div class="section-heading">
-          <div><p class="eyebrow">LE GROUPE</p><h2 id="characters-title">Les aventuriers</h2></div>
+          <div><p class="eyebrow">ESPACE JOUEUR</p><h2 id="party-title">Mon groupe</h2></div>
           <label class="filter-wrap">
-            <span class="sr-only">Filtrer par campagne</span>
-            <select id="campaign-filter"><option value="">Toutes les campagnes</option></select>
+            <span class="sr-only">Campagne</span>
+            <select id="party-campaign"></select>
             <span aria-hidden="true">⌄</span>
           </label>
         </div>
-        <p class="notice" id="notice" role="status" aria-live="polite">Chargement des personnages…</p>
-        <div class="character-grid" id="character-list"></div>
+        <div class="roster" id="party-roster"></div>
       </section>
 
-      <section class="gm-panel" id="gm-panel" hidden aria-labelledby="gm-title">
+      <!-- MJ / admin : la table de jeu -->
+      <section class="view" id="view-campagnes" hidden aria-labelledby="gm-title">
         <div class="section-heading">
-          <div><p class="eyebrow">ESPACE PRIVÉ</p><h2 id="gm-title">Outils du maître du jeu</h2></div>
-          <button class="button button-quiet" id="logout-mj" type="button">Fermer la session</button>
+          <div><p class="eyebrow" id="gm-eyebrow">TABLE DU MJ</p><h2 id="gm-title">Mes campagnes</h2></div>
+        </div>
+        <div class="workspace">
+          <nav class="campaign-picker" id="campaign-picker" aria-label="Campagnes"></nav>
+          <div class="campaign-detail" id="campaign-detail">
+            <div class="detail-head">
+              <div>
+                <h3 id="detail-name"></h3>
+                <p class="detail-meta" id="detail-meta"></p>
+              </div>
+              <button class="button button-small" id="detail-toggle" type="button"></button>
+            </div>
+
+            <div class="quick-actions">
+              <form class="quick-card" id="xp-form">
+                <h4>Distribuer de l’XP</h4>
+                <div class="inline-fields">
+                  <label><span class="sr-only">XP par personnage</span><input name="xp" type="number" min="0" value="100" required></label>
+                  <button class="button button-outline" type="submit">Donner à chacun</button>
+                </div>
+                <p class="form-hint">Personnages non morts de la campagne.</p>
+              </form>
+              <form class="quick-card" id="roll-form">
+                <h4>Lancer un dé</h4>
+                <div class="inline-fields">
+                  <label><span class="sr-only">Personnage</span><select name="personnage_id" required></select></label>
+                  <label><span class="sr-only">Action</span><select name="type_jet">
+                    <option>attaque</option><option>dégâts</option><option>sauvegarde</option><option>compétence</option><option>initiative</option>
+                  </select></label>
+                  <label><span class="sr-only">Dé</span><select name="faces">
+                    <option value="20">d20</option><option value="4">d4</option><option value="6">d6</option><option value="8">d8</option><option value="10">d10</option><option value="12">d12</option><option value="100">d100</option>
+                  </select></label>
+                  <label><span class="sr-only">Caractéristique</span><select name="carac">
+                    <option value="">Sans mod.</option><option>FOR</option><option>DEX</option><option>CON</option><option>INT</option><option>SAG</option><option>CHA</option>
+                  </select></label>
+                  <button class="button button-outline" type="submit">Lancer</button>
+                </div>
+                <p class="roll-result" id="roll-result" aria-live="polite"></p>
+              </form>
+            </div>
+
+            <div class="roster-tools">
+              <label class="search"><span class="sr-only">Rechercher</span><input id="roster-search" type="search" placeholder="Rechercher un personnage ou un joueur"></label>
+              <span class="section-note" id="roster-count"></span>
+            </div>
+            <div class="roster" id="gm-roster"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- MJ / admin : créer -->
+      <section class="view" id="view-creer" hidden aria-labelledby="create-title">
+        <div class="section-heading">
+          <div><p class="eyebrow">TABLE DU MJ</p><h2 id="create-title">Créer</h2></div>
         </div>
         <div class="gm-tools">
           <form class="tool-card" id="character-form">
-            <h3>Créer un personnage</h3>
+            <h3>Nouveau personnage</h3>
             <label>Nom <input name="nom" maxlength="80" required></label>
             <div class="form-row">
               <label>Campagne <select name="campagne_id" data-campaign-options required></select></label>
@@ -96,64 +160,43 @@
             <button class="button button-gold" type="submit">Ajouter au grimoire</button>
           </form>
 
-          <div class="tool-stack">
-            <form class="tool-card" id="campaign-form">
-              <h3>Ouvrir une campagne</h3>
-              <label>Nom <input name="nom" maxlength="100" required></label>
-              <label>Univers <input name="univers" maxlength="60" value="Royaumes oubliés" required></label>
-              <label>Maître du jeu <select name="mj_id" required></select></label>
-              <label>Date de début <input name="debut" type="date" required></label>
-              <button class="button button-outline" type="submit">Créer la campagne</button>
-            </form>
-            <form class="tool-card" id="roll-form">
-              <h3>Lancer les dés</h3>
-              <label>Personnage <select name="personnage_id" required></select></label>
-              <div class="form-row">
-                <label>Action <select name="type_jet">
-                  <option>attaque</option><option>dégâts</option><option>sauvegarde</option><option>compétence</option><option>initiative</option>
-                </select></label>
-                <label>Dé <select name="faces">
-                  <option>20</option><option>4</option><option>6</option><option>8</option><option>10</option><option>12</option><option>100</option>
-                </select></label>
-              </div>
-              <label>Caractéristique <select name="carac">
-                <option value="">Aucun modificateur</option><option>FOR</option><option>DEX</option><option>CON</option><option>INT</option><option>SAG</option><option>CHA</option>
-              </select></label>
-              <button class="button button-outline" type="submit">Lancer le dé</button>
-              <p class="roll-result" id="roll-result" aria-live="polite"></p>
-            </form>
-            <form class="tool-card" id="xp-form">
-              <h3>Distribuer de l’XP</h3>
-              <label>Campagne <select name="campagne_id" data-campaign-options required></select></label>
-              <label>XP par personnage <input name="xp" type="number" min="0" value="100" required></label>
-              <button class="button button-outline" type="submit">Attribuer l’XP</button>
-              <p class="form-hint">Appliquée aux personnages non morts de la campagne.</p>
-            </form>
+          <form class="tool-card" id="campaign-form">
+            <h3>Nouvelle campagne</h3>
+            <label>Nom <input name="nom" maxlength="100" required></label>
+            <label>Univers <input name="univers" maxlength="60" value="Royaumes oubliés" required></label>
+            <label id="mj-choice">Maître du jeu <select name="mj_id" required></select></label>
+            <label>Date de début <input name="debut" type="date" required></label>
+            <button class="button button-outline" type="submit">Créer la campagne</button>
+          </form>
+        </div>
+      </section>
+
+      <!-- Admin : comptes -->
+      <section class="view" id="view-comptes" hidden aria-labelledby="admin-title">
+        <div class="section-heading">
+          <div><p class="eyebrow">ADMINISTRATION</p><h2 id="admin-title">Comptes</h2></div>
+          <span class="section-note" id="account-count"></span>
+        </div>
+        <div class="admin-tools">
+          <div class="tool-card">
+            <h3>Comptes existants</h3>
+            <div class="account-list" id="account-list"></div>
           </div>
-          <form class="tool-card" id="pv-form">
-            <h3>Ajuster les points de vie</h3>
-            <label>Personnage <select name="personnage_id" required></select></label>
-            <div class="form-row">
-              <label>Variation (+ soin, − dégâts) <input name="delta" type="number" min="-100000" max="100000" required></label>
-              <label>Motif <input name="motif" maxlength="200" placeholder="Ex. potion de soins"></label>
-            </div>
-            <button class="button button-outline" type="submit">Appliquer</button>
-            <p class="form-hint">Les règles de mort et le journal des PV sont gérés par PostgreSQL.</p>
+          <form class="tool-card sticky-card" id="account-form">
+            <h3>Créer un compte</h3>
+            <label>Identifiant <input name="identifiant" maxlength="40" pattern="[A-Za-z0-9._\-]{3,40}" autocomplete="off" required></label>
+            <label>Mot de passe <input name="mot_de_passe" type="password" minlength="10" maxlength="200" autocomplete="new-password" required></label>
+            <label>Rôle <select name="role">
+              <option value="joueur">Joueur</option><option value="mj">Maître du jeu</option><option value="admin">Admin</option>
+            </select></label>
+            <label>Joueur relié <select name="joueur_id"></select></label>
+            <label id="new-pseudo" hidden>Pseudo du nouveau joueur <input name="nouveau_pseudo" maxlength="40"></label>
+            <button class="button button-gold" type="submit">Créer le compte</button>
+            <p class="form-hint">Un joueur ou un MJ est toujours relié à une personne de la table. Un admin peut ne pas l’être.</p>
           </form>
         </div>
       </section>
     </main>
-
-    <dialog id="mj-dialog">
-      <form id="mj-login-form" method="dialog">
-        <button class="dialog-close" type="button" id="close-mj-dialog" aria-label="Fermer">×</button>
-        <p class="eyebrow">ACCÈS PRIVÉ</p><h2>Bienvenue, maître du jeu.</h2>
-        <p class="form-hint">Saisis la clé MJ fournie par la personne qui héberge le Grimoire.</p>
-        <label>Clé d’accès <input name="token" type="password" autocomplete="current-password" required></label>
-        <p class="notice" id="login-error" role="alert"></p>
-        <button class="button button-gold" type="submit">Ouvrir les outils</button>
-      </form>
-    </dialog>
 
     <footer><span class="brand-mark" aria-hidden="true">✦</span><span>LE GRIMOIRE</span><span class="footer-note">FAIT POUR LES HISTOIRES QU’ON RACONTE ENSEMBLE</span></footer>
   </body>

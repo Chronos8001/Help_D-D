@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#11130f">
+    <title>Connexion — Le Grimoire</title>
+    <link rel="stylesheet" href="/styles.css">
+    <script src="/config.js"></script>
+    <script src="/session.js"></script>
+    <script src="/login.js" defer></script>
+  </head>
+  <body class="login-page">
+    <main class="login-shell">
+      <div class="login-brand">
+        <span class="brand-mark" aria-hidden="true">✦</span>
+        <span>GRIMOIRE<small>REGISTRE D’AVENTURE</small></span>
+      </div>
+      <form class="login-card" id="login-form">
+        <p class="eyebrow">CONNEXION</p>
+        <h1>Bon retour, aventurier.</h1>
+        <p class="form-hint">Joueurs, maîtres du jeu et administrateurs se connectent ici.</p>
+        <label>Identifiant <input name="identifiant" autocomplete="username" autofocus required></label>
+        <label>Mot de passe <input name="mot_de_passe" type="password" autocomplete="current-password" required></label>
+        <p class="notice" id="login-error" role="alert"></p>
+        <button class="button button-gold" type="submit">Se connecter <span aria-hidden="true">→</span></button>
+        <p class="form-hint">Pas encore de compte ? Demande-le à l’administrateur de ta table.</p>
+      </form>
+    </main>
+  </body>
+</html>

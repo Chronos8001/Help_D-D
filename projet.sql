@@ -132,10 +132,10 @@ INSERT INTO joueurs (pseudo, email) VALUES
     ('Mordak',     'mordak@grimoire.test'),
     ('Ysolde',     'ysolde@grimoire.test');
 
--- 34 joueurs de plus, pour peupler les autres tables.
+-- 12 joueurs de plus : 4 autour de chacune des trois autres tables.
 INSERT INTO joueurs (pseudo, email)
 SELECT 'Aventurier ' || i, 'aventurier' || i || '@grimoire.test'
-FROM generate_series(7, 40) AS i;
+FROM generate_series(7, 18) AS i;
 
 INSERT INTO campagnes (nom, univers, mj_id, debut) VALUES
     ('La Mine perdue de Phandelver', 'Royaumes oubliés', 1, '2025-01-04'),
@@ -187,36 +187,35 @@ INSERT INTO personnages
     (NULL, 1, 1, 12, 'Glasstaff (PNJ)',     4, 2700,  9, 12, 12, 18, 11, 13, 22, 22, 12, 'vivant', 'C''est Iarno Albrek, traître de l''Alliance des Seigneurs.'),
     (3,    1, 5, 1,  'Grok le Téméraire',   2,  300, 17, 12, 15,  7,  9,  8, 25,  0, 13, 'mort',   'Mort au tour 3 contre le ver géant.');
 
--- 194 personnages générés, répartis sur les 4 campagnes.
+-- Quatre personnages joueurs pour chacune des trois autres tables.
 -- PV max (règle D&D 5e) : dé de vie + mod(CON) au niveau 1,
 -- puis (dé/2 + 1 + mod(CON)) par niveau supplémentaire.
 INSERT INTO personnages
     (joueur_id, campagne_id, race_id, classe_id, nom, niveau, xp,
      force, dexterite, constitution, intelligence, sagesse, charisme,
-     pv_max, pv_actuels, classe_armure)
+     pv_max, pv_actuels, classe_armure, notes_mj)
 SELECT g.joueur_id, g.campagne_id, g.race_id, g.classe_id, g.nom, g.niveau,
-       (ARRAY[0, 300, 900, 2700, 6500, 14000, 23000, 34000, 48000, 64000])[g.niveau],
+       (ARRAY[0, 300, 900, 2700, 6500])[g.niveau],
        g.fo, g.de, g.co, g.int_, g.sa, g.ch,
-       pv.pv, pv.pv,
-       10 + (g.de - 10) / 2 + (g.i % 6)
-FROM (
-    SELECT i,
-           1 + (i % 40)                                    AS joueur_id,
-           1 + (i % 4)                                     AS campagne_id,
-           1 + (i % 9)                                     AS race_id,
-           1 + (i % 12)                                    AS classe_id,
-           (ARRAY['Aldric','Brynja','Cédric','Dagna','Eldrin','Fenna','Garrick','Hilda',
-                  'Ivor','Jorunn','Kael','Liora','Magnus','Nessa','Orin'])[1 + i % 15]
-             || ' ' ||
-           (ARRAY['Courtevue','Ferpoing','Lunargent','Sombrebois','Hautecime','Rivefroide',
-                  'Cendrelame','Tisseciel','Pierrefeu','Valombre','Brisevent','Clairsang'])[1 + (i / 15) % 12]
-                                                           AS nom,
-           1 + (i % 10)                                    AS niveau,
-           8 + (random() * 10)::int AS fo,  8 + (random() * 10)::int AS de,
-           8 + (random() * 10)::int AS co,  8 + (random() * 10)::int AS int_,
-           8 + (random() * 10)::int AS sa,  8 + (random() * 10)::int AS ch
-    FROM generate_series(7, 200) AS i
-) AS g
+       pv.pv, pv.pv, g.ca, g.notes
+FROM (VALUES
+    -- La Malédiction de Strahd (campagne 2, niveau 4)
+    ( 7, 2, 1, 8,  'Rudolph Vasar',       4, 13, 16, 14, 10, 14,  8, 15, 'A juré de venger sa sœur, mordue à Vallaki.'),
+    ( 8, 2, 9, 2,  'Mirela Kovač',        4,  8, 14, 12, 13, 10, 17, 13, 'Les Vistani la reconnaissent comme une des leurs.'),
+    ( 9, 2, 3, 3,  'Frère Anselm',        4, 14,  8, 15, 10, 17, 12, 18, NULL),
+    (10, 2, 7, 11, 'Ilinca Morteveille',  4,  8, 14, 13, 12, 10, 17, 13, 'Son protecteur occulte est un des fiancés de Strahd.'),
+    -- Le Tombeau de l'Annihilation (campagne 3, niveau 3)
+    (11, 3, 1, 4,  'Kwame Feuillevent',   3, 10, 12, 14, 12, 17,  8, 13, NULL),
+    (12, 3, 2, 8,  'Zahra Ombrelune',     3, 12, 17, 13, 10, 14,  8, 15, 'Porte la malédiction de mort : ses PV max baissent chaque jour.'),
+    (13, 3, 3, 5,  'Bram Rochecuivre',    3, 16, 10, 16,  8, 12, 10, 18, NULL),
+    (14, 3, 6, 9,  'Fizz Engrenage',      3,  8, 17, 12, 15, 10, 13, 14, 'A volé une carte du Chult au port Nyanzaru.'),
+    -- Les Voyages vers Eberron (campagne 4, niveau 2)
+    (15, 4, 9, 10, 'Lorne d''Lyrandar',   2,  8, 13, 14, 10, 12, 17, 11, 'Héritier déshérité de la maison Lyrandar.'),
+    (16, 4, 1, 7,  'Kessa Vadalis',       2, 16, 10, 14,  8, 12, 15, 18, NULL),
+    (17, 4, 7, 6,  'Vex Sansvisage',      2, 10, 17, 13, 12, 15,  8, 15, 'Changelin caché sous une apparence de tieffelin.'),
+    (18, 4, 8, 12, 'Durgan Forgefer',     2, 10, 13, 14, 17, 12,  8, 11, NULL)
+) AS g (joueur_id, campagne_id, race_id, classe_id, nom, niveau,
+        fo, de, co, int_, sa, ch, ca, notes)
 JOIN classes AS c ON c.id = g.classe_id
 CROSS JOIN LATERAL (
     SELECT greatest(1, c.de_vie + floor((g.co - 10) / 2.0)::int
@@ -244,7 +243,7 @@ FROM (VALUES
 JOIN personnages AS p ON p.nom = v.perso
 JOIN objets      AS o ON o.nom = v.objet;
 
--- Trois objets légers pour chacun des personnages générés.
+-- Trois objets légers pour chacun des personnages des autres tables.
 INSERT INTO inventaire (personnage_id, objet_id, quantite)
 SELECT DISTINCT p.id, o.id, 1
 FROM personnages AS p
@@ -254,7 +253,8 @@ JOIN objets AS o
                     'Sac de couchage', 'Épée longue'])[1 + (p.id + k * 2) % 6]
 WHERE p.id > 6;
 
--- 500 000 jets de dés, environ un toutes les 75 secondes depuis janvier 2025.
+-- 500 000 jets de dés, environ un toutes les 75 secondes depuis janvier 2025,
+-- répartis sur les 18 personnages.
 -- Le résultat est tiré entre 1 et le nombre de faces du dé.
 INSERT INTO jets_de_des (personnage_id, type_jet, faces, resultat, modificateur, lance_le)
 SELECT j.personnage_id, j.type_jet, j.faces,
@@ -262,7 +262,7 @@ SELECT j.personnage_id, j.type_jet, j.faces,
        (random() * 5)::int,
        j.lance_le
 FROM (
-    SELECT 1 + (i % 200) AS personnage_id,
+    SELECT 1 + (i % 18) AS personnage_id,
            (ARRAY['attaque', 'dégâts', 'sauvegarde', 'compétence', 'initiative'])[1 + (i / 7) % 5] AS type_jet,
            (ARRAY[20, 20, 20, 20, 6, 8, 10, 12, 4, 100])[1 + (i / 3) % 10]                         AS faces,
            timestamptz '2025-01-04 20:00' + i * interval '75 seconds'                              AS lance_le
