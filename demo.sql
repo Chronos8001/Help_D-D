@@ -38,6 +38,7 @@ RESET ROLE;
 
 
 \echo ''
+\prompt '>>> Entrée pour la suite... ' pause
 \echo '===================== 2) VUES ====================='
 
 \echo '--- Ce que voit le MJ : notes secrètes et PNJ (Glasstaff, joueur_id NULL) ---'
@@ -56,6 +57,7 @@ RESET ROLE;
 
 
 \echo ''
+\prompt '>>> Entrée pour la suite... ' pause
 \echo '===================== 3) INDEX ====================='
 \echo '(mesures faites par le propriétaire : il faut pouvoir supprimer et recréer l''index)'
 
@@ -102,6 +104,7 @@ LIMIT 10;
 
 
 \echo ''
+\prompt '>>> Entrée pour la suite... ' pause
 \echo '===================== 4) TRIGGERS ====================='
 
 \echo '--- Charge : Thorin (Force 16, 120 kg max) porte déjà 51 kg ---'
@@ -125,3 +128,6 @@ CALL modifier_pv(1, 5, 'potion de soins');
 SELECT nom_personnage, ancien_pv, nouveau_pv, motif, auteur, le
 FROM vue_mj_journal ORDER BY id DESC LIMIT 2;
 RESET ROLE;
+
+\echo ''
+\echo '===================== FIN DE LA DÉMO ====================='
